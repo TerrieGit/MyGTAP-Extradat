@@ -223,6 +223,7 @@ def DatAgg(df, mappingfile):
     agg = agg.drop(['economy'], axis=1)
 
     agg = agg.fillna(0)
+    agg = agg.replace('', 0)
 
     Order = pd.read_excel(mappingfile, sheet_name="Sheet2")
 
