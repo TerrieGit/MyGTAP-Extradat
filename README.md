@@ -1,8 +1,8 @@
 # MyGTAP-Extradat
-Python program to construct Extradat.har for MyGTAP program.
-This python program can be used to update extradat.har which is used in construction of the MyGTAP database.
+This is a Python program intended to help you construct Extradat.har for the MyGTAP mulitple and single programs.
+Extradat.har must be updated with each new version of the GTAP database. Updates include updating the year and the mapping file.
 
 Issues:
 1. bring down IMF data using API - currently use excel 
-2. issue with TWN and other very small countries in xtw - no data
-3. Need to look into Harpy to see if I can get it to send to a har file
+2. issue with TWN - Data on GDP and Population are unavailable from the World Bank website and therefore must be entered mannually for new years.  
+3. Currently the aggregated data is sent to an excel file.  The data then needs to be copied manually into the ExtraDat.har file used in MyGTAP.
