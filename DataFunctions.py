@@ -108,13 +108,14 @@ def GetDatIMFex(filename, indicator, BOPType, years):
     df = df.reset_index(names = "SERIES_CODE")
     df[["economy", "BOPAcct", "D1", "Currency", "FREQ"]] = df["SERIES_CODE"].str.split(".", expand=True)
     df = df.set_index('economy')
-    df = df.dropna(how='all')
 
     dftype = df[df['BOPAcct'] == BOPType]
     
     dftype = dftype.drop(['SERIES_CODE','BOPAcct','D1','Currency','FREQ'], axis=1)
 
     dftype.info()
+    dftype = dftype.dropna(how='all')
+    
     return dftype
 
 # This function takes a dataframe and fills missing values using using aggregate ratios obtained using a mapping file.
@@ -211,10 +212,10 @@ def DatFillEq(Paid, Rec, mappingfile, fill):
 
 # This function takes a dataframe and aggregates it using a mapping file.  This is used when aggregatingto the GTAP database.
 
-def DatAgg(df, mappingfile):
+def DatAgg(df, version):
     import pandas as pd
     
-    mappings = pd.read_excel(mappingfile, sheet_name="Sheet1")
+    mappings = pd.read_excel('GTAPMap.xlsx', sheet_name = f"{version}_map")
     mappings = mappings.drop(['longnames'], axis=1, errors='ignore')
     
     df = df.merge(mappings, on='economy', how="left", sort=False)
@@ -222,11 +223,11 @@ def DatAgg(df, mappingfile):
     agg = df.groupby('Regions').sum()
     agg = agg.drop(['economy'], axis=1)
 
-    agg = agg.fillna(0)
-    agg = agg.replace('', 0)
-
-    Order = pd.read_excel(mappingfile, sheet_name="Sheet2")
+    Order = pd.read_excel('GTAPMap.xlsx', sheet_name = f"{version}_set")
 
     agg = agg.reindex(Order['Regions'])
+
+    agg = agg.fillna(0)
+    agg = agg.replace('', 0)
     
     return agg
