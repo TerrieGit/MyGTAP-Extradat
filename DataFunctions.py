@@ -180,7 +180,7 @@ def DatFillEq(Paid, Rec, mappingfile, fill):
     df = df.merge(mappings, on='economy', how="left")
     df = df.dropna(subset=['Regions'])
     df = df.set_index('economy')
-
+    
     df2agg = df.dropna(how='any')
     
     agg = df2agg.groupby('Regions').sum()
@@ -204,10 +204,13 @@ def DatFillEq(Paid, Rec, mappingfile, fill):
 
     df['Paid'] = df['Paid'] * scale1
     df['Rec'] = df['Rec'] * scale2
-    
+
     Paid1 = df.drop(['fill','Rec'], axis=1) 
     Rec1 = df.drop(['fill','Paid'], axis=1) 
 
+    Paid1[Paid1 < 0] = 0    
+    Rec1[Rec1 < 0] = 0    
+    
     return Paid1, Rec1, scale
 
 # This function takes a dataframe and aggregates it using a mapping file.  This is used when aggregatingto the GTAP database.
@@ -227,6 +230,7 @@ def DatAgg(df, version):
 
     agg = agg.reindex(Order['Regions'])
 
+    agg = agg/1000000
     agg = agg.fillna(0)
     agg = agg.replace('', 0)
     
