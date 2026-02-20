@@ -1,14 +1,12 @@
+# these programs require the following
+import pandas as pd
+import wbgapi as wb
+import openpyxl
+
 # Here are some functions used to extract, fill and aggregated World Bank data to prepare it for use with GTAP.
 # To call this file in the python program use one of the following
 #          import DataFunctions
 #          import DataFunctions as XX (e.g., import DataFunctions as DF)
-
-# You will also need to install some python programs:
-#      pip install imfdatapy
-#      pip install wbgapi
-# and import them:
-#      import imfdatapy imf
-#      import wbgapi wb
 
 def GetDatWBTS(WBcode,Year): 
 # This function obtains time series data from the world bank - all data after a particular year 
@@ -23,9 +21,6 @@ def GetDatWBTS(WBcode,Year):
 
 #    Returns a pandas.DataFrame
 
-    import wbgapi as wb
-    import pandas as pd
-    
     df = wb.data.DataFrame(WBcode,index='economy')
     df = pd.DataFrame(df)
     
@@ -55,9 +50,6 @@ def GetDatWB(WBcode, years):
 
 #    Returns pandas.DataFrame
 
-    import wbgapi as wb
-    import pandas as pd
-
     df = wb.data.DataFrame(WBcode, index='economy')
     df = pd.DataFrame(df)
 
@@ -85,8 +77,6 @@ def GetDatIMFex(filename, indicator, BOPType, years):
 #      years : tuple/list [y1, y2, y3, ...] -> explicit list of years to keep
 
 #    Returns pandas.DataFrame
-
-    import pandas as pd
 
     df = pd.read_excel(filename)
 
@@ -129,7 +119,6 @@ def GetDatIMFex(filename, indicator, BOPType, years):
 # You might use this to fill labor where missing data is filled using labor relative to POP (fill) of the region
 
 def DatFill(df, mappingfile, fill):
-    import pandas as pd
     
     mappings = pd.read_excel(mappingfile)
     mappings = mappings.drop(['longnames'], axis=1, errors='ignore')
@@ -167,7 +156,6 @@ def DatFill(df, mappingfile, fill):
 # and then ensures total paid equals total received across all countries
 
 def DatFillEq(Paid, Rec, mappingfile, fill):
-    import pandas as pd
 
     mappings = pd.read_excel(mappingfile)
     mappings = mappings.drop(['longnames'], axis=1, errors='ignore')
@@ -216,7 +204,6 @@ def DatFillEq(Paid, Rec, mappingfile, fill):
 # This function takes a dataframe and aggregates it using a mapping file.  This is used when aggregatingto the GTAP database.
 
 def DatAgg(df, version):
-    import pandas as pd
     
     mappings = pd.read_excel('GTAPMap.xlsx', sheet_name = f"{version}_map")
     mappings = mappings.drop(['longnames'], axis=1, errors='ignore')
@@ -235,3 +222,116 @@ def DatAgg(df, version):
     agg = agg.replace('', 0)
     
     return agg
+
+def MyGTAPConstruct(year,version):
+    # The requirements to run this program are listed in requirements.txt. Before running this file you should:
+    # 1. create a virtual environment 
+    # 2. install the required programs from the requirements.txt file: py -m pip install -r requirements.txt. 
+
+    # This program also refers to an number of sub programs provided above
+    # This files contains the following functions
+    #     GetDatWB(WBcode, years) - extracts data from World Bank using code and year/s. This is used the get data like GDP, remittances etc
+    #     GetDatIMFex(filename, indicator, BOPType, years) - extracts receipts and payments from IMF Balance of payments data downloaded into an excel (e.g., workers compensation).
+    #         IMF does have an API but could not get it to work
+    #     DatFill(df, mappingfile, fill) - fills a dataframe (df) using other data fill (e.g., fill remittances using GDP).
+    #     DatFillEq(Paid, Rec, mappingfile, fill) - fills two data frames and ensures they are equal.  For instance remittances 
+    #         paid andreceived by country are filled using a data series named fill and are also scaled to ensure payments equal receipts. 
+    #         Note this function has 3 outputs - updated payments, receipts and the scale.  The closer scale is to 1 the less scaling done to make sure payments equal receipts.
+
+    # Gets POP from World Bank API
+    POP = GetDatWB('SP.POP.TOTL',[year])
+
+    # Gets GDP from World Bank API
+    GDP = GetDatWB('NY.GDP.MKTP.CD',[year])
+
+    # Fill Taiwan's data for year (need to update if update year - can usually find in google) 
+    TWNdata = {
+        2004: (346900000000, 22700000),
+        2007: (406900000000, 22958000),
+        2011: (484000000000, 23268760),
+        2014: (535300000000, 23491977),
+        2017: (591700000000, 23674547),
+        2019: (613510000000, 23773881),
+        2023: (756590000000, 23424442),
+    }
+    if year in TWNdata:
+        GDP.loc['TWN'], POP.loc['TWN'] = TWNdata[year]
+
+    # Fill GDP so as to avoid missing tiny countries
+    GDP = DatFill(GDP, 'Mappings.xlsx', POP)
+
+    # Gets Worker's compensation payments for IMF excel file
+    WCompPaid = GetDatIMFex('dataset_2026-02-17T23_01_53.772380157Z_DEFAULT_INTEGRATION_IMF.STA_BOP_21.0.0.xlsx', 'Compensation of employees', 'DB_T', [year])
+
+    # Gets Worker's compensation payments for IMF excel file
+    WCompRec = GetDatIMFex('dataset_2026-02-17T23_01_53.772380157Z_DEFAULT_INTEGRATION_IMF.STA_BOP_21.0.0.xlsx', 'Compensation of employees', 'CD_T', [year])
+
+    # Fills workers compensation data and ensure receipts equal payments
+    WCompPaid, WCompRec, scale = DatFillEq(WCompPaid, WCompRec, 'Mappings.xlsx', GDP)
+    # Print how much scaling was required
+    print("This is how much scaling was required to equalize receipts and payments globally (1 means no scaling):", scale)
+
+    # Aggregate to GTAP using mapping file
+    WCompPaid = DatAgg(WCompPaid,version)
+    WCompRec = DatAgg(WCompRec,version)
+
+    # Gets Primary income from World Bank API
+    PIPaid = GetDatWB('BM.GSR.FCTY.CD',[year]) 
+
+    # Gets Primary income from World Bank API
+    PIRec = GetDatWB('BX.GSR.FCTY.CD',[year]) 
+
+    # Fills primary income data and ensure receipts equal payments
+    PIPaid, PIRec, scale = DatFillEq(PIPaid, PIRec, 'Mappings.xlsx',GDP)
+    # Print how much scaling was required
+    print("This is how much scaling was required to equalize receipts and payments globally (1 means no scaling):", scale)
+
+    # Aggregate to GTAP using mapping file
+    PIPaid = DatAgg(PIPaid,version)
+    PIRec = DatAgg(PIRec,version)
+
+    # Gets Remittances from World Bank API
+    RemRec = GetDatWB('BX.TRF.PWKR.CD.DT',[year])
+
+    # Gets Remittances from World Bank API
+    RemPaid = GetDatWB('BM.TRF.PWKR.CD.DT',[year])
+
+    # Fills remittances data and ensure receipts equal payments
+    RemPaid, RemRec, scale = DatFillEq(RemPaid, RemRec, 'Mappings.xlsx',GDP)
+    # Print how much scaling was required
+    print("This is how much scaling was required to equalize receipts and payments globally (1 means no scaling):", scale)
+
+    # Aggregate to GTAP using mapping file
+    RemPaid = DatAgg(RemPaid,version)
+    RemRec = DatAgg(RemRec,version)
+
+    # Gets Aid from World Bank API
+    AidRec = GetDatWB('DT.ODA.ODAT.CD',[year])
+
+    # Gets Aid from World Bank API
+    AidPaid = GetDatWB('DC.ODA.TOTL.CD',[year])
+
+    # Fills aid data and ensure receipts equal payments
+    AidPaid, AidRec, scale = DatFillEq(AidPaid, AidRec, 'Mappings.xlsx',GDP)
+    # Print how much scaling was required
+    print("This is how much scaling was required to equalize receipts and payments globally (1 means no scaling):", scale)
+
+    # Aggregate to GTAP using mapping file
+    AidPaid = DatAgg(AidPaid,version)
+    AidRec = DatAgg(AidRec,version)
+
+    # Note we want foreign income related to workers and capital - Primary income includes workers compensation and foreign investment - hence workers compensation must be subtracted.
+    InvPaid = PIPaid - WCompPaid
+    InvRec = PIRec - WCompRec
+
+    # Write data to excel
+    filename = f"MyGTAPoutput_{version}_{year}.xlsx"
+    with pd.ExcelWriter(filename, engine="openpyxl") as writer:
+        RemPaid.to_excel(writer, sheet_name="RemPaid", index=True)
+        RemRec.to_excel(writer, sheet_name="RemRec", index=True)
+        InvPaid.to_excel(writer, sheet_name="InvPaid", index=True)
+        InvRec.to_excel(writer, sheet_name="InvRec", index=True)
+        AidPaid.to_excel(writer, sheet_name="AidPaid", index=True)
+        AidRec.to_excel(writer, sheet_name="AidRec", index=True)
+
+    return print(f"COMPLETED: see {filename} containing new information for MyGTAP {version} and year {year}")

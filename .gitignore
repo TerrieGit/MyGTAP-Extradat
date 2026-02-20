@@ -7,3 +7,5 @@ all.csv
 MyGTAPoutput_v11c_2017.xlsx
 MyGTAPoutput_v12_2019.xlsx
 MyGTAPoutput_v12_2023.xlsx
+.ipynb_checkpoints/callMyGTAP-checkpoint.ipynb
+/__pycache__
